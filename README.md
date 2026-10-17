@@ -1,6 +1,8 @@
-# ReMakePlace 插件
+# ReMakePlace 插件（国服维护版）
 
 ReMakePlace 插件可在 FFXIV 中自动保存和加载房屋家具布局，并支持导入/导出原 MakePlace 程序、MakePlace 插件以及新版 [ReMakePlace](https://github.com/RemakePlace/app) 的布局文件。
+
+本仓库是 `blackappleD` 维护的国服维护版，基于 [QiongHHHZZZ/plugin](https://github.com/QiongHHHZZZ/plugin)（上游为 [RemakePlace/plugin](https://github.com/RemakePlace/plugin)），适配国服 Dalamud 并汉化界面，通过 [blackappleD/DalamudPlugins](https://github.com/blackappleD/DalamudPlugins) 插件仓库发布。
 
 ## 目录
 
@@ -8,6 +10,7 @@ ReMakePlace 插件可在 FFXIV 中自动保存和加载房屋家具布局，并�
 - [使用](#使用)
   - [从游戏中保存布局](#从游戏中保存布局)
   - [将布局加载到游戏中](#将布局加载到游戏中)
+- [发布新版本](#发布新版本)
 - [从源码构建](#从源码构建)
 - [常见问题](#常见问题)
 - [致谢](#致谢)
@@ -21,16 +24,19 @@ ReMakePlace 插件可在 FFXIV 中自动保存和加载房屋家具布局，并�
 - 在 “Custom Plugin Repositories/自定义插件仓库” 中新增以下地址：
 
   ```text
-  https://raw.githubusercontent.com/QiongHHHZZZ/DalamudPlugins/main/pluginmaster.json
+  https://raw.githubusercontent.com/blackappleD/DalamudPlugins/main/repo.json
   ```
 
 - 点击 `+` 添加，并确认该仓库已启用。
 - 点击 “Save and Close/保存并关闭”。
 - 输入 `/xlplugins`，或按 `Esc` 打开插件安装窗口。
-- 搜索 “ReMakePlace Plugin” 并安装。
+- 搜索 “ReMakePlace” 并安装 “ReMakePlace（国服维护版）”。
+
+> [!WARNING]
+> 本版本的 InternalName 与原版相同（`ReMakePlacePlugin`），请勿与原版或其他仓库提供的 ReMakePlace 同时安装。
 
 > [!NOTE]
-> 原上游说明中提到该插件不适用于国服。如需在国服环境使用，请优先确认你使用的 Dalamud 与 API 版本是否匹配，并参考本仓库的构建说明。
+> 原上游插件不适用于国服；本版本针对国服 Dalamud（API 15）构建。如无法加载，请先确认你使用的 Dalamud 与 API 版本是否匹配。
 
 ## 使用
 
@@ -63,6 +69,15 @@ ReMakePlace 插件可在 FFXIV 中自动保存和加载房屋家具布局，并�
 - **从文件加载**：与“加载”相同，但会先选择布局文件。
 - **摆放间隔**：应用布局时两次家具摆放之间的间隔。过低（如 200ms）可能导致漏摆。
 - **标注家具**：在屏幕上显示家具名称，并提供按钮将布局位置应用到对应家具。
+
+## 发布新版本
+
+版本号使用四段数字：前三段跟随上游，第 4 段从 `2001` 起递增；上游前三段升级后重新从 `2001` 起（例如上游 `7.5.1` → `7.5.1.2001`）。
+
+1. 修改 `ReMakePlacePlugin/ReMakePlacePlugin.csproj` 中的 `PluginVersion`，并同步根目录 `ReMakePlacePlugin.json` 中的版本与下载链接。
+2. 提交并推送 `master`，然后推送 `v<版本号>` 格式的 tag（如 `v7.5.1.2001`）。
+3. GitHub Actions 会构建并创建 Release，上传 `ReMakePlacePlugin.zip`。
+4. 在 [DalamudPlugins](https://github.com/blackappleD/DalamudPlugins) 中更新 `repo.json` 的 `AssemblyVersion` 与下载链接。
 
 ## 从源码构建
 
@@ -103,7 +118,7 @@ dotnet build ReMakePlacePlugin.sln -c Release
 - 插件 API 等级与当前 Dalamud 环境匹配。
 - 构建时使用的 `DALAMUD_HOME` 指向正确的 `Hooks\dev` 目录。
 
-如果仍无法解决，可以在 GitHub 提交 issue，或到官方 Discord 频道反馈：<https://discord.gg/f2VAqXKWUw>
+如果仍无法解决，可以联系 `blackappleD` 反馈；原版问题也可以到官方 Discord 频道反馈：<https://discord.gg/f2VAqXKWUw>
 
 ### 非英语客户端可以使用吗？
 
