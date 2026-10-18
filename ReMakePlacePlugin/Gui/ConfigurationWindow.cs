@@ -9,6 +9,8 @@ using Dalamud.Interface.Windowing;
 using Dalamud.Utility;
 using ECommons.DalamudServices;
 using ECommons.MathHelpers;
+using FFXIVClientStructs.FFXIV.Client.Enums;
+using FFXIVClientStructs.FFXIV.Component.GUI;
 using Lumina.Excel.Sheets;
 using ReMakePlacePlugin.Objects;
 using System;
@@ -31,6 +33,11 @@ public class ConfigurationWindow : Window, IDisposable
     private readonly Vector4 PURPLE_ALPHA = new(0.26275f, 0.21569f, 0.56863f, 0.5f);
 
     private FileDialogManager FileDialogManager { get; }
+
+    // 上一帧鼠标悬停的物品 ID，在 Update 中统一显示/隐藏游戏原生物品悬浮窗
+    private uint hoveredItemId;
+    private bool isItemTooltipShown;
+
     public Configuration Config { get; init; }
     public ReMakePlacePlugin Plugin { get; init; }
 
@@ -47,7 +54,7 @@ public class ConfigurationWindow : Window, IDisposable
 
     public void Dispose()
     {
-        // no-op
+        HideItemTooltip();
     }
 
     private void SafeMatch()
@@ -98,6 +105,21 @@ public class ConfigurationWindow : Window, IDisposable
         this.FileDialogManager.Draw();
     }
 
+    public override void Update()
+    {
+        // 窗口折叠时不会调用 Draw，hoveredItemId 保持为 0，悬浮窗随之隐藏
+        if (Config.ShowItemTooltip && hoveredItemId != 0)
+            ShowItemTooltip(hoveredItemId);
+        else
+            HideItemTooltip();
+        hoveredItemId = 0;
+    }
+
+    public override void OnClose()
+    {
+        HideItemTooltip();
+    }
+
     public override void PreDraw()
     {
         base.PreDraw();
@@ -115,6 +137,35 @@ public class ConfigurationWindow : Window, IDisposable
     }
 
     #region Basic UI
+
+    private void TrackItemHover(uint itemId)
+    {
+        if (itemId != 0 && ImGui.IsItemHovered())
+            hoveredItemId = itemId;
+    }
+
+    private unsafe void ShowItemTooltip(uint itemId)
+    {
+        var screenText = (AtkUnitBase*)Svc.GameGui.GetAddonByName("_ScreenText").Address;
+        if (screenText == null) return;
+
+        var args = stackalloc AtkTooltipManager.AtkTooltipArgs[1];
+        args->Ctor();
+        args->ItemArgs.Kind = DetailKind.ItemId;
+        args->ItemArgs.ItemId = (int)itemId;
+        AtkStage.Instance()->TooltipManager.ShowTooltip(AtkTooltipType.Item, screenText->Id, screenText->RootNode, args);
+        isItemTooltipShown = true;
+    }
+
+    private unsafe void HideItemTooltip()
+    {
+        if (!isItemTooltipShown) return;
+        isItemTooltipShown = false;
+
+        var screenText = (AtkUnitBase*)Svc.GameGui.GetAddonByName("_ScreenText").Address;
+        if (screenText != null)
+            AtkStage.Instance()->TooltipManager.HideTooltip(screenText->Id);
+    }
 
     private void LogLayoutMode()
     {
@@ -337,6 +388,16 @@ public class ConfigurationWindow : Window, IDisposable
             ImGui.SetTooltip("在屏幕上显示家具名称");
 
         //ImGui.SameLine();ImGui.Dummy(new Vector2(10, 0));ImGui.SameLine();
+
+        if (ImGui.Checkbox("显示物品详情", ref Config.ShowItemTooltip)) Config.Save();
+        if (Config.ShowTooltips && ImGui.IsItemHovered())
+        {
+            using (ImRaii.Tooltip())
+            {
+                ImGui.Text("鼠标悬停在物品列表上时显示游戏原生的物品详情");
+                ImGui.Text("配合 Daily Routines「更好的市场布告板」可显示市场价格");
+            }
+        }
 
         if (ImGui.Checkbox("显示提示", ref Config.ShowTooltips)) Config.Save();
 
@@ -561,6 +622,7 @@ public class ConfigurationWindow : Window, IDisposable
         if (Svc.Data.GetExcelSheet<Item>().TryGetRow(housingItem.ItemKey, out var item))
         {
             DrawIcon(item.Icon, new Vector2(20, 20));
+            TrackItemHover(housingItem.ItemKey);
             ImGui.SameLine();
         }
 
@@ -569,6 +631,7 @@ public class ConfigurationWindow : Window, IDisposable
             ImGui.PushStyleColor(ImGuiCol.Text, new Vector4(0.5f, 0.5f, 0.5f, 1));
         }
         ImGui.Text(displayName);
+        TrackItemHover(housingItem.ItemKey);
         if (ImGui.IsItemClicked()) ImGui.SetClipboardText(displayName);
         ImGui.TableNextColumn();
 
@@ -615,8 +678,10 @@ public class ConfigurationWindow : Window, IDisposable
             {
                 if (!housingItem.DyeMatch) ImGui.PushStyleColor(ImGuiCol.Text, new Vector4(0.5f, 0.5f, 0.5f, 1));
                 DrawIcon(mitem.Icon, new Vector2(20, 20));
+                TrackItemHover(housingItem.MaterialItemKey);
                 ImGui.SameLine();
                 ImGui.Text(mitem.Name.ToString());
+                TrackItemHover(housingItem.MaterialItemKey);
                 if (!housingItem.DyeMatch) ImGui.PopStyleColor();
             }
         }
@@ -652,9 +717,11 @@ public class ConfigurationWindow : Window, IDisposable
                     if (Svc.Data.GetExcelSheet<Item>().TryGetRow(fixture.itemId, out var item))
                     {
                         DrawIcon(item.Icon, new Vector2(20, 20));
+                        TrackItemHover(fixture.itemId);
                         ImGui.SameLine();
                     }
                     ImGui.Text(fixture.name);
+                    TrackItemHover(fixture.itemId);
                 }
 
                 ImGui.EndTable();

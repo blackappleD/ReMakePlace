@@ -28,6 +28,8 @@ public class Configuration : IPluginConfiguration
     public bool SelectPreviousDye = false;
     public bool UseRareStains = false;
 
+    public bool ShowItemTooltip = true;
+
     public void Save()
     {
         Svc.PluginInterface.SavePluginConfig(this);
