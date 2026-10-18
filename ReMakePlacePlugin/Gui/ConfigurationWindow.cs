@@ -365,15 +365,15 @@ public class ConfigurationWindow : Window, IDisposable
                 _ => section.label
             };
 
-            if (ImGui.CollapsingHeader($"{displayLabel} 家具", ImGuiTreeNodeFlags.DefaultOpen))
+            if (ImGui.CollapsingHeader($"{displayLabel} 家具 ({GetItemCountText(section.items, section.unused)})###Furniture", ImGuiTreeNodeFlags.DefaultOpen))
             {
                 if (section.unused) { DrawItemList(section.items, true); }
-                else { DrawItemList(section.items); }
+                else { DrawItemList(section.items, false, $"{displayLabel}家具"); }
             }
 
             if (!section.unused)
             {
-                if (ImGui.CollapsingHeader($"{displayLabel} 固定装置", ImGuiTreeNodeFlags.DefaultOpen))
+                if (ImGui.CollapsingHeader($"{displayLabel} 固定装置 ({section.fixtures.Count})###Fixtures", ImGuiTreeNodeFlags.DefaultOpen))
                 {
                     DrawFixtureList(section.fixtures);
                 }
@@ -382,6 +382,21 @@ public class ConfigurationWindow : Window, IDisposable
         }
         ImGui.PopStyleColor(3);
         ImGui.EndChild();
+    }
+
+    // 匹配：场景中已摆放并关联上的物品；就位：位置、旋转、染色/材质都已正确
+    private static string GetItemCountText(List<HousingItem> items, bool unused)
+    {
+        if (unused) return items.Count.ToString();
+
+        int matched = 0, placed = 0;
+        foreach (var item in items)
+        {
+            if (item.ItemStruct == IntPtr.Zero) continue;
+            matched++;
+            if (item.CorrectLocation && item.CorrectRotation && item.DyeMatch) placed++;
+        }
+        return $"就位 {placed} / 匹配 {matched} / 共 {items.Count}";
     }
 
     unsafe private void DrawGeneralSettings()
@@ -761,7 +776,7 @@ public class ConfigurationWindow : Window, IDisposable
 
     }
 
-    private void DrawItemList(List<HousingItem> itemList, bool isUnused = false)
+    private void DrawItemList(List<HousingItem> itemList, bool isUnused = false, string? syncLabel = null)
     {
         if (ImGui.Button("排序"))
         {
@@ -791,6 +806,22 @@ public class ConfigurationWindow : Window, IDisposable
         if (IconTextButton(FontAwesomeIcon.SyncAlt, "刷新"))
         {
             LoadLayoutFromFile();
+        }
+
+        if (syncLabel != null)
+        {
+            ImGui.SameLine();
+            var noFile = string.IsNullOrEmpty(Config.SaveLocation);
+            ImGui.BeginDisabled(noFile);
+            if (ImGui.Button("同步到 GBR") && !noFile)
+            {
+                // 用独立的清单名，避免覆盖整体同步生成的清单
+                var listName = $"ReMakePlace - {Path.GetFileNameWithoutExtension(Config.SaveLocation)} - {syncLabel}";
+                GatherBuddySync.Sync(listName, itemList.Select(item => item.ItemKey));
+            }
+            ImGui.EndDisabled();
+            if (Config.ShowTooltips && ImGui.IsItemHovered(ImGuiHoveredFlags.AllowWhenDisabled))
+                ImGui.SetTooltip(noFile ? "没有可同步的文件" : $"只将{syncLabel}同步到 GatherBuddy Reborn，生成单独的制作清单和商店购买清单");
         }
 
         // name, position, r, color, set
