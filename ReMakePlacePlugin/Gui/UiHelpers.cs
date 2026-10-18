@@ -31,28 +31,23 @@ public static class UiHelpers
         var spacing = ImGui.GetStyle().ItemInnerSpacing;
 
         var buttonSizeX = iconSize.X + textSize.X + padding.X * 2 + spacing.X;
-        var buttonSizeY = (iconSize.Y > textSize.Y ? iconSize.Y : textSize.Y) + padding.Y * 2;
-        var buttonSize = new Vector2(buttonSizeX, buttonSizeY);
-
-        var buttonClicked = ImGui.Button("###" + icon.ToIconString() + text, buttonSize);
-        var cursorAfter = ImGui.GetCursorScreenPos();
-
-        var itemMin = ImGui.GetItemRectMin();
         var contentHeight = iconSize.Y > textSize.Y ? iconSize.Y : textSize.Y;
-        var contentPos = new Vector2(
-            itemMin.X + padding.X,
-            itemMin.Y + (buttonSizeY - contentHeight) * 0.5f
-        );
+        var buttonSizeY = contentHeight + padding.Y * 2;
+        var frameHeight = ImGui.GetFrameHeight();
+        if (buttonSizeY < frameHeight) buttonSizeY = frameHeight;
 
-        ImGui.SetCursorScreenPos(contentPos);
+        var buttonClicked = ImGui.Button("###" + icon.ToIconString() + text, new Vector2(buttonSizeX, buttonSizeY));
+
+        // 用 DrawList 绘制图标和文字，保证按钮是最后一个控件，SameLine 才能与按钮对齐
+        var itemMin = ImGui.GetItemRectMin();
+        var drawList = ImGui.GetWindowDrawList();
+        var color = ImGui.GetColorU32(ImGuiCol.Text);
+
         ImGui.PushFont(UiBuilder.IconFont);
-        ImGui.Text(icon.ToIconString());
+        drawList.AddText(new Vector2(itemMin.X + padding.X, itemMin.Y + (buttonSizeY - iconSize.Y) * 0.5f), color, icon.ToIconString());
         ImGui.PopFont();
 
-        var textPos = new Vector2(contentPos.X + iconSize.X + spacing.X, contentPos.Y);
-        ImGui.SetCursorScreenPos(textPos);
-        ImGui.Text(text);
-        ImGui.SetCursorScreenPos(cursorAfter);
+        drawList.AddText(new Vector2(itemMin.X + padding.X + iconSize.X + spacing.X, itemMin.Y + (buttonSizeY - textSize.Y) * 0.5f), color, text);
 
         return buttonClicked;
     }
