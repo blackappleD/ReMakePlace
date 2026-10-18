@@ -406,8 +406,16 @@ public class ReMakePlacePlugin : IDalamudPlugin
         SelectItemDetour((IntPtr)Memory.Instance.HousingStructure, item);
     }
 
+    // 室外家具超出地块可布置范围时，游戏会提示“无法布置到这个位置”。
+    // 每轮摆完后核对实际位置，失败的家具向地块中心每次挪 RetryStep 米重试。
+    private const int MaxPlaceRetries = 4;
+    private const float RetryStep = 0.25f;
+    private static readonly List<HousingItem> AttemptedItems = new();
+    private static readonly Dictionary<HousingItem, int> PlaceRetries = new();
+
     public unsafe void RecursivelyPlaceItems()
     {
+        var aborted = false;
 
         try
         {
@@ -417,6 +425,7 @@ public class ReMakePlacePlugin : IDalamudPlugin
                 {
                     LogError($"已退出旋转布局模式，剩余 {ItemsToPlace.Count} 件未摆放");
                     ItemsToPlace.Clear();
+                    aborted = true;
                     break;
                 }
 
@@ -427,16 +436,24 @@ public class ReMakePlacePlugin : IDalamudPlugin
 
                 if (item.CorrectLocation && item.CorrectRotation)
                 {
-                    Log($"{item.Name} 已正确摆放");
+                    if (!PlaceRetries.ContainsKey(item))
+                        Log($"{item.Name} 已正确摆放");
                     continue;
                 }
 
                 Svc.Framework.RunOnTick(RecursivelyPlaceItems, TimeSpan.FromMilliseconds(Config.LoadInterval));
 
+                AttemptedItems.Add(item);
                 SetItemPosition(item);
                 return;
             }
 
+            if (!aborted && AttemptedItems.Count > 0 && Memory.Instance.GetCurrentTerritory() == HousingArea.Outdoors)
+            {
+                // 留出时间等服务器确认最后一件的摆放结果
+                Svc.Framework.RunOnTick(VerifyPlacedItems, TimeSpan.FromMilliseconds(Math.Max(1000, Config.LoadInterval)));
+                return;
+            }
         }
         catch (Exception e)
         {
@@ -444,13 +461,76 @@ public class ReMakePlacePlugin : IDalamudPlugin
         }
 
         Cleanup();
+    }
 
-        void Cleanup()
+    private void VerifyPlacedItems()
+    {
+        try
         {
-            Memory.Instance.SetPlaceAnywhere(OriginalPlaceAnywhere);
-            CurrentlyPlacingItems = false;
-        Log("布局应用完成");
+            if (!Memory.Instance.CanEditItem())
+            {
+                LogError("已退出旋转布局模式，未完成摆放核对");
+                Cleanup();
+                return;
+            }
+
+            MatchLayout();
+
+            foreach (var item in AttemptedItems)
+            {
+                if (item.ItemStruct == IntPtr.Zero) continue;
+
+                PlaceRetries.TryGetValue(item, out var retries);
+
+                if (item.CorrectLocation)
+                {
+                    if (retries > 0)
+                        Log($"{item.Name} 原位置超出可布置范围，已向内挪动 {retries * RetryStep:0.##} 米");
+                    continue;
+                }
+
+                if (retries >= MaxPlaceRetries)
+                {
+                    LogError($"{item.Name} 向内挪动 {retries * RetryStep:0.##} 米后仍无法布置，已跳过，请手动调整");
+                    continue;
+                }
+
+                PlaceRetries[item] = retries + 1;
+                MoveTowardPlotCenter(item, RetryStep);
+                ItemsToPlace.Add(item);
+            }
+
+            AttemptedItems.Clear();
         }
+        catch (Exception e)
+        {
+            LogError($"错误: {e.Message}", e.StackTrace);
+            ItemsToPlace.Clear();
+            AttemptedItems.Clear();
+        }
+
+        RecursivelyPlaceItems();
+    }
+
+    private static void MoveTowardPlotCenter(HousingItem item, float distance)
+    {
+        // 室外坐标以地块中心为原点，只沿水平方向内移，高度不变
+        var horizontal = new Vector2(item.X, item.Z);
+        var length = horizontal.Length();
+        if (length <= distance) return;
+
+        horizontal *= (length - distance) / length;
+        item.X = horizontal.X;
+        item.Z = horizontal.Y;
+    }
+
+    private static void Cleanup()
+    {
+        Memory.Instance.SetPlaceAnywhere(OriginalPlaceAnywhere);
+        CurrentlyPlacingItems = false;
+        AttemptedItems.Clear();
+        PlaceRetries.Clear();
+        Log("布局应用完成");
     }
 
     unsafe public static void SetItemPosition(HousingItem rowItem)
@@ -510,6 +590,8 @@ public class ReMakePlacePlugin : IDalamudPlugin
         Log($"正在应用布局，间隔为 {Config.LoadInterval}ms");
 
         ItemsToPlace.Clear();
+        AttemptedItems.Clear();
+        PlaceRetries.Clear();
 
         List<HousingItem> placedLast = new List<HousingItem>();
 
