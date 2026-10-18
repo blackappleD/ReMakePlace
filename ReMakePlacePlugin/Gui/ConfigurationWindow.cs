@@ -3,6 +3,7 @@
 using Dalamud.Bindings.ImGui;
 using Dalamud.Interface;
 using Dalamud.Interface.ImGuiFileDialog;
+using Dalamud.Interface.ImGuiNotification;
 using Dalamud.Interface.Utility;
 using Dalamud.Interface.Utility.Raii;
 using Dalamud.Interface.Windowing;
@@ -142,6 +143,21 @@ public class ConfigurationWindow : Window, IDisposable
     {
         if (itemId != 0 && ImGui.IsItemHovered())
             hoveredItemId = itemId;
+    }
+
+    private static void CopyNameOnClick(string name)
+    {
+        if (!ImGui.IsItemHovered()) return;
+
+        ImGui.SetMouseCursor(ImGuiMouseCursor.Hand);
+        if (!ImGui.IsItemClicked()) return;
+
+        ImGui.SetClipboardText(name);
+        Svc.NotificationManager.AddNotification(new Notification
+        {
+            Content = $"已复制：{name}",
+            Type = NotificationType.Success,
+        });
     }
 
     private unsafe void ShowItemTooltip(uint itemId)
@@ -623,6 +639,7 @@ public class ConfigurationWindow : Window, IDisposable
         {
             DrawIcon(item.Icon, new Vector2(20, 20));
             TrackItemHover(housingItem.ItemKey);
+            CopyNameOnClick(displayName);
             ImGui.SameLine();
         }
 
@@ -632,7 +649,7 @@ public class ConfigurationWindow : Window, IDisposable
         }
         ImGui.Text(displayName);
         TrackItemHover(housingItem.ItemKey);
-        if (ImGui.IsItemClicked()) ImGui.SetClipboardText(displayName);
+        CopyNameOnClick(displayName);
         ImGui.TableNextColumn();
 
         if (!housingItem.CorrectLocation) ImGui.PushStyleColor(ImGuiCol.Text, new Vector4(0.5f, 0.5f, 0.5f, 1));
