@@ -11,8 +11,8 @@ public static class GatherBuddySync
 {
     private const string IpcPrefix = "GatherBuddyReborn";
 
-    // GBR 从 IPC 版本 7 开始提供 CraftingListReplaceByName
-    private const int RequiredIpcVersion = 7;
+    // GBR 从 IPC 版本 8 开始提供 CraftingListReplaceByNameNQ：半成品全部 NQ，成品除高难度配方外都按 NQ 制作
+    private const int RequiredIpcVersion = 8;
 
     private const int ListBusy = -3;
     private const int VendorNotReady = -4;
@@ -40,7 +40,7 @@ public static class GatherBuddySync
             }
 
             var (written, uncraftable) = Svc.PluginInterface
-                .GetIpcSubscriber<string, (uint, uint)[], (int, uint[])>($"{IpcPrefix}.CraftingListReplaceByName")
+                .GetIpcSubscriber<string, (uint, uint)[], (int, uint[])>($"{IpcPrefix}.CraftingListReplaceByNameNQ")
                 .InvokeFunc(listName, items);
             if (written == ListBusy)
             {
