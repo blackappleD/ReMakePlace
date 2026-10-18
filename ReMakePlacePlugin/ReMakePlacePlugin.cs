@@ -413,6 +413,13 @@ public class ReMakePlacePlugin : IDalamudPlugin
         {
             while (ItemsToPlace.Count > 0)
             {
+                if (!Memory.Instance.CanEditItem())
+                {
+                    LogError($"已退出旋转布局模式，剩余 {ItemsToPlace.Count} 件未摆放");
+                    ItemsToPlace.Clear();
+                    break;
+                }
+
                 var item = ItemsToPlace.First();
                 ItemsToPlace.RemoveAt(0);
 

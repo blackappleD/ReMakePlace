@@ -320,7 +320,8 @@ public unsafe class Memory
     /// <returns>Boolean state if housing menu is on or off.</returns>
     public unsafe bool CanEditItem()
     {
-        return true;
+        // 摆放必须处于“旋转”模式，否则游戏会拒绝写入的位置（房屋操作失败）。
+        return GetLayoutMode() == HousingLayoutMode.Rotate;
     }
 
     /// <summary>
@@ -329,7 +330,16 @@ public unsafe class Memory
     /// <returns>Boolean state if furnishing color menu is on or off.</returns>
     public unsafe bool CanDyeItem()
     {
-        return true;
+        // 染色必须处于“家具染色”模式，否则交互不会打开染色窗口。
+        return GetLayoutMode() == HousingLayoutMode.FurnishingColor;
+    }
+
+    public unsafe HousingLayoutMode GetLayoutMode()
+    {
+        if (LayoutWorld == null || HousingStructure == null)
+            return HousingLayoutMode.None;
+
+        return HousingStructure->Mode;
     }
 
     /// <summary>

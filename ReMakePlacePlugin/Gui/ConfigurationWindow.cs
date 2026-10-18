@@ -214,21 +214,13 @@ public class ConfigurationWindow : Window, IDisposable
             return false;
         }
 
-        if (ApplyLayout)
+        // 仅加载/匹配不需要特定模式；自动摆放必须处于旋转模式。
+        if (ApplyLayout && !Memory.Instance.CanEditItem())
         {
-            if (!Memory.Instance.CanEditItem())
-            {
-                LogError("未处于旋转布局模式，无法加载并应用布局");
-                return false;
-            }
-        }
-        else
-        {
-            if (!Memory.Instance.CanEditItem() && !Memory.Instance.CanDyeItem())
-            {
-                LogError("未处于旋转布局模式或家具染色模式，无法加载布局");
-                return false;
-            }
+            LogError($"未处于旋转布局模式，无法加载并应用布局（当前模式：{LayoutModeName()}）");
+            LogError("请先进入家具布置，并在布置菜单中点击“旋转”后再应用");
+            LogLayoutMode();
+            return false;
         }
 
         return true;
@@ -238,12 +230,26 @@ public class ConfigurationWindow : Window, IDisposable
     {
         if (!Memory.Instance.IsHousingMode() || !Memory.Instance.CanDyeItem())
         {
-            LogError("未处于家具染色模式，无法加载并应用染色");
+            LogError($"未处于家具染色模式，无法加载并应用染色（当前模式：{LayoutModeName()}）");
+            LogError("请先进入家具布置，并在布置菜单中点击“家具染色”后再应用");
+            LogLayoutMode();
             return false;
         }
 
         return true;
     }
+
+    private static string LayoutModeName() => Memory.Instance.GetLayoutMode() switch
+    {
+        HousingLayoutMode.None => "未在布置",
+        HousingLayoutMode.Move => "移动",
+        HousingLayoutMode.Rotate => "旋转",
+        HousingLayoutMode.Store => "收纳",
+        HousingLayoutMode.Place => "放置",
+        HousingLayoutMode.FurnishingColor => "家具染色",
+        HousingLayoutMode.Remove => "移除",
+        var mode => mode.ToString(),
+    };
 
     private void SaveLayoutToFile()
     {
