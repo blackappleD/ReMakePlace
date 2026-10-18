@@ -467,6 +467,16 @@ public class ConfigurationWindow : Window, IDisposable
             }
         }
 
+        DrawMainMenuButton("同步到 GBR", () =>
+        {
+            var listName = $"ReMakePlace - {Path.GetFileNameWithoutExtension(Config.SaveLocation)}";
+            var itemIds = Plugin.InteriorItemList.Concat(Plugin.ExteriorItemList).Select(item => item.ItemKey);
+            GatherBuddySync.Sync(listName, itemIds);
+        },
+        string.IsNullOrEmpty(Config.SaveLocation),
+        "将布局所需家具同步到 GatherBuddy Reborn：可制作的物品生成制作清单，其余物品生成商店购买清单",
+        ImGui.GetContentRegionAvail().X);
+
         ImGui.Text("摆放间隔");
 
         ImGui.Dummy(new Vector2(5, 0)); ImGui.SameLine();
