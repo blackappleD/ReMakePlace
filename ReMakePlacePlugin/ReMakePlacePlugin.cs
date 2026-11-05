@@ -1219,9 +1219,6 @@ public class ReMakePlacePlugin : IDalamudPlugin
 
         var mgr = Memory.Instance.HousingModule->outdoorTerritory;
 
-        var objectListAddr = (IntPtr)(&mgr->ObjectList);
-        var activeObjList = (IntPtr)(mgr->Objects) - 0x08;
-
         if (!GetPlotLocation())
             return;
 
@@ -1244,6 +1241,27 @@ public class ReMakePlacePlugin : IDalamudPlugin
         Layout.exteriorScale = 1;
         Layout.properties["entranceLayout"] = PlotLocation.entranceLayout;
 
+        // 庭院背包只对应自己的地块；参观他人庭院时改为扫描场景中的室外物体（移植自 DisPlace）。
+        if (!LoadExteriorFromInventory(mgr, rotateVector))
+        {
+            ExteriorItemList.Clear();
+            LoadExteriorFromWorldObjects(mgr, rotateVector);
+        }
+
+        Config.Save();
+    }
+
+    /// <summary>
+    /// 从庭院背包读取当前地块的家具。背包与当前地块对不上（如在他人庭院）时返回 false。
+    /// </summary>
+    private unsafe bool LoadExteriorFromInventory(HousingObjectManager* mgr, Quaternion rotateVector)
+    {
+        var objectListAddr = (IntPtr)(&mgr->ObjectList);
+        var activeObjList = (IntPtr)(mgr->Objects) - 0x08;
+
+        // 用场景中能找到的物体校验背包物品，至少一件对上且没有对不上的，才认为背包属于当前地块。
+        var verified = 0;
+
         // in hopes of more slots again in the future...
         var exteriorItemInventories = new[]
         {
@@ -1254,6 +1272,7 @@ public class ReMakePlacePlugin : IDalamudPlugin
         foreach (var (exteriorItemInventory, offset) in exteriorItemInventories)
         {
             var exteriorItemContainer = Memory.GetContainer(exteriorItemInventory);
+            if (exteriorItemContainer == null) continue;
 
             for (int i = 0; i < exteriorItemContainer->Size; i++)
             {
@@ -1304,13 +1323,72 @@ public class ReMakePlacePlugin : IDalamudPlugin
 
                 if (gameObj != null)
                 {
+                    if (Svc.Data.GetExcelSheet<HousingYardObject>().TryGetRow(gameObj->housingRowId, out var yardObject))
+                    {
+                        if (yardObject.Item.RowId != item->ItemId)
+                        {
+                            Svc.Log.Debug($"庭院背包与当前地块不一致: 背包 {item->ItemId}，场景 {yardObject.Item.RowId}");
+                            return false;
+                        }
+                        verified++;
+                    }
+
                     housingItem.ItemStruct = (IntPtr)gameObj->Item;
                 }
 
                 ExteriorItemList.Add(housingItem);
             }
         }
-        Config.Save();
+
+        return verified > 0;
+    }
+
+    /// <summary>
+    /// 扫描室外场景中已加载的庭院物体，只保留落在当前地块范围内的。
+    /// 不依赖庭院背包，可用于保存他人庭院；邮箱等可交互物件不在此列表中。
+    /// </summary>
+    private unsafe void LoadExteriorFromWorldObjects(HousingObjectManager* mgr, Quaternion rotateVector)
+    {
+        // 地块半宽，按各住宅区最大的地块目测取值（来自 DisPlace）。
+        var (xMax, zMax) = PlotLocation.size switch
+        {
+            "l" => (20.5f, 24.5f),
+            "m" => (16.5f, 16.5f),
+            "s" => (12.5f, 12.5f),
+            _ => (0f, 0f),
+        };
+        const float yMax = 7f;
+
+        for (var i = 0; i < 600; i++)
+        {
+            var oPtr = mgr->Objects[i];
+            if (oPtr == 0) continue;
+
+            var gameObj = (HousingGameObject*)oPtr;
+
+            if (!Svc.Data.GetExcelSheet<HousingYardObject>().TryGetRow(gameObj->housingRowId, out var yardObject)) continue;
+            if (!yardObject.Item.IsValid || yardObject.Item.RowId == 0) continue;
+
+            var location = new Vector3(gameObj->X, gameObj->Y, gameObj->Z);
+            var newLocation = Vector3.Transform(location - PlotLocation.ToVector(), rotateVector);
+
+            if (Math.Abs(newLocation.X) > xMax || Math.Abs(newLocation.Y) > yMax || Math.Abs(newLocation.Z) > zMax)
+                continue;
+
+            var housingItem = new HousingItem(
+                yardObject.Item.Value,
+                gameObj->color,
+                newLocation.X,
+                newLocation.Y,
+                newLocation.Z,
+                gameObj->rotation + PlotLocation.rotation
+            );
+            housingItem.ItemStruct = (IntPtr)gameObj->Item;
+
+            ExteriorItemList.Add(housingItem);
+        }
+
+        Svc.Log.Debug($"通过场景扫描读取到 {ExteriorItemList.Count} 件庭院家具");
     }
 
     public bool IsSelectedFloor(float y)
